@@ -1,3 +1,6 @@
 #+TITLE: CHANGELOG
 #+DESCRIPTION: A list of changes to the arifer612/actions repository
 
+** unreleased
+Additions:
+- build-docs.yaml to build documentation using Emacs

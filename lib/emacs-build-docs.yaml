@@ -1,0 +1,121 @@
+name: Build documentation with Emacs
+
+on:
+  workflow_call:
+    inputs:
+      commit_message:
+        type: string
+        required: false
+        default: ''
+        description: Commit message for updating the documentation
+      bot_signing:
+        type: boolean
+        required: false
+        default: false
+        description: Use a bot to sign commits
+      bot_name:
+        type: string
+        required: false
+        default: ''
+        description: Name of the bot used for signing commits
+      bot_email:
+        type: string
+        required: false
+        default: ''
+        description: Email of the bot used for signing commits
+      master_branch:
+        type: string
+        required: false
+        default: 'master'
+        description: Name of the master branch
+    secrets:
+      GPG_PRIVATE_KEY:
+        required: false
+        description: Private GPG key for signing commits
+      GPG_PASSPHRASE:
+        required: false
+        description: Passphrase for GPG_PRIVATE_KEY
+    outputs:
+      version:
+        value: ${{ jobs.docs.outputs.version }}
+        description: Parsed release version
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install Emacs
+        run: |
+          sudo apt install emacs-nox --yes
+
+      - name: Cleanup VERSION for master branch
+        id: version
+        if: ${{ github.ref_name == inputs.master_branch }}
+        run: |
+          echo "$(cat VERSION | cut -d '-' -f 1)" > VERSION
+          echo "::set-output name=value::$(cat VERSION)"
+          echo "VERSION=$(cat VERSION)" >> $GITHUB_ENV
+
+      - name: Cleanup CHANGELOG
+        if: ${{ github.ref_name == inputs.master_branch }}
+        run: |
+          sed -i "s/unreleased$/${{ env.VERSION }}/" CHANGELOG.org
+
+      - name: Update documentation with Emacs
+        run: |
+          emacs -Q --script ./.github/scripts/doc-builder.el
+
+      - name: Check for changes
+        run: |
+          git diff-index --quiet HEAD
+          echo "CHANGES=$?" >> $GITHUB_ENV
+        shell: bash -x {0}
+
+      - name: Import GPG key for commit signing
+        id: import_gpg
+        if: env.CHANGES && secrets.GPG_PRIVATE_KEY
+        uses: crazy-max/ghaction-import-gpg@v4
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          git_use_signingkey: true
+          git_commit_gpg_sign: true
+
+      - name: Sanity check
+        id: handler
+        if: >
+          ${{
+          ( env.CHANGES && inputs.bot_signing ) &&
+          ! ( inputs.bot_name || inputs.bot_email )
+          }}
+        run: |
+          echo "Bot details are not furnished!"
+          exit 127
+
+      - name: Commit and push documentation as ownself
+        uses: EndBug/add-and-commit@v9
+        if: >
+          ${{ env.CHANGES && ! inputs.bot_signing }}
+        with:
+          add: .
+          message: ${{ inputs.commit_message }}
+          push: true
+
+      - name: Commit and push documentation with bot
+        uses: EndBug/add-and-commit@v9
+        if: >
+          ${{ env.CHANGES && inputs.bot_signing }}
+        with:
+          add: .
+          message: ${{ inputs.commit_message }}
+          author_name: ${{ inputs.bot_name }}
+          author_email: ${{ inputs.bot_email }}
+          committer_name: ${{ inputs.bot_name }}
+          committer_email: ${{ inputs.bot_email }}
+          push: true

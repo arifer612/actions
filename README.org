@@ -3,3 +3,44 @@
 #+EMAIL: arifer612@pm.me
 
 This repository provides reusable workflows for my projects.
+
+** Contents :TOC_3_gh:noexport:
+  - [[#emacs-build-docsyaml][emacs-build-docs.yaml]]
+
+** emacs-build-docs.yaml
+
+This workflow builds my documentation and README files using Emacs. I make use
+of my 'bot' to handle the commit in the workflow so as to differentiate CI/CD
+commits from human commits. These commits are also signed cryptographically
+with a GPG key I made separately for that 'bot'. Details as to how one can go
+about setting that up can be found on [[https://github.com/Nautilus-Cyberneering/pygithub/blob/main/docs/how_to_sign_automatic_commits_in_github_actions.md#solution-02-using-your-own-pgp-key-as-a-secret][this very detailed post]].
+
+Importing of the GPG keys is handled by [[https://github.com/crazy-max/ghaction-import-gpg][crazy-max/ghaction-import-gpg]] and the
+committing is handled by [[https://github.com/EndBug/add-and-commit][EndBug/add-and-commit]]. No tagging is done in this
+action yet because I am working out some details with my workflow before I
+implement it.
+
+#+BEGIN_SRC yaml :eval never :exports code
+  jobs:
+    build_docs:
+      uses: arifer612/actions/lib/emacs-build-docs.yaml@main
+      with:
+        bot_signing: true
+        bot_name: my_bot
+        bot_email: my_bot@domain.tld
+        master_branch: main
+        commit_message: Committing another day of my life to you
+      secrets:
+        GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+#+END_SRC
+
+| Name              | Type    | Description                                   | Default  |
+|-------------------+---------+-----------------------------------------------+----------|
+| =commit_message=  | string  | Commit message for updating the documentation | ''       |
+| =bot_signing=     | boolean | Use a bot to sign commits?                    | true     |
+| =bot_name=        | string  | Name of the bot used for signing commits      | ''       |
+| =bot_email=       | string  | Email of the bot used for signing commits     | ''       |
+| =master_branch=   | string  | Name of the master branch                     | ''       |
+| =GPG_PRIVATE_KEY= | secret  | Private GPG key for signing commits           | ''       |
+| =GPG_PASSPHRASE=  | secret  | Passphrase for GPG_PRIVATE_KEY                | ''       |
